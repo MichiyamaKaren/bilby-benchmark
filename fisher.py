@@ -9,7 +9,7 @@ from detector_response import fisher_matrix, localization_accuracy, fisher_matri
 from bilby.gw import WaveformGenerator
 from bilby.gw.conversion import convert_to_lal_binary_black_hole_parameters as bilby_convert
 from bilby.gw.detector import Interferometer, TriangularInterferometer, InterferometerList
-from typing import List, Union
+from typing import Union
 
 import os
 import pickle
@@ -64,10 +64,10 @@ def GR_waveform_from_mode_array(mode_array):
     return waveform
 
 
-def save_fisher_data(filename, all_fisher, default_parameters, ra_grid, dec_grid):
+def save_fisher_data(filename, all_fisher, default_parameters, ra, dec):
     fisher_data = dict(all_fisher=all_fisher,
                        default_parameters=default_parameters,
-                       ra_grid=ra_grid, dec_grid=dec_grid)
+                       ra=ra, dec=dec)
     with open(filename, 'wb') as f:
         pickle.dump(fisher_data, f)
 
@@ -75,7 +75,7 @@ def save_fisher_data(filename, all_fisher, default_parameters, ra_grid, dec_grid
 def load_fisher_data(filename):
     with open(filename, 'rb') as f:
         fisher_data = pickle.load(f)
-    return fisher_data['all_fisher'], fisher_data['default_parameters'], fisher_data['ra_grid'], fisher_data['dec_grid']
+    return fisher_data['all_fisher'], fisher_data['default_parameters'], fisher_data['ra'], fisher_data['dec']
 
 
 # %%
@@ -155,57 +155,59 @@ parser.add_argument('--load', type=str,
 args = parser.parse_args()
 
 # %%
-def fisher_wrapper(network):
-    def wrapped_fisher(ra, dec):
+
+
+def fisher_wrapper(network, ra):
+    def wrapped_fisher(dec):
         return fisher_matrix(network, mode_array, GR_generator_from_mode,
                              default_parameters, parameter_names, ra=ra, dec=dec)
     return wrapped_fisher
 
 
-def fisher_stationary_wrapper(network):
-    def wrapped_fisher_stationary(ra, dec):
+def fisher_stationary_wrapper(network, ra):
+    def wrapped_fisher_stationary(dec):
         return fisher_matrix_stationary(network, generator_22,
                                         default_parameters, parameter_names, ra=ra, dec=dec)
     return wrapped_fisher_stationary
 
 
 if args.load:
-    all_fisher, _, ra_grid, dec_grid = load_fisher_data(args.load)
+    all_fisher, _, ra, dec = load_fisher_data(args.load)
 else:
     pool = pathos.multiprocessing.ProcessPool(nodes=args.n)
 
     ra = np.linspace(0, 2*np.pi, 100)
     dec = np.linspace(0, np.pi, 100)
-    ra_grid, dec_grid = np.meshgrid(ra, dec)
     all_fisher = {network_name: np.zeros(
-        list(ra_grid.shape)+2*[len(parameter_names)]) for network_name in ifo_networks}
+        list(ra.shape)+list(dec.shape)+2*[len(parameter_names)]) for network_name in ifo_networks}
 
     start_t = datetime.now()
 
     for network_name, network in ifo_networks.items():
-        for i in range(ra_grid.shape[0]):
+        for i, ra_i in enumerate(ra):
             ifo_fisher = pool.map(
-                fisher_stationary_wrapper(network), ra_grid[i, :], dec_grid[i, :])
+                fisher_stationary_wrapper(network, ra_i), dec)
             all_fisher[network_name][i, :, :, :] = np.array(ifo_fisher)
 
     end_t = datetime.now()
     print('used time:', end_t-start_t)
 
     save_fisher_data(args.save, all_fisher,
-                     default_parameters, ra_grid, dec_grid)
+                     default_parameters, ra, dec)
 
 # %%
 for ifo_name, ifo_fisher in all_fisher.items():
     accuracy = np.array([[
         localization_accuracy(
-            ifo_fisher[i, j], dec_grid[i, j]+np.pi/2,
+            ifo_fisher[i, j], dec[j],
             name_to_index_map['ra'], name_to_index_map['dec']
         ) for j in range(ifo_fisher.shape[1])
     ] for i in range(ifo_fisher.shape[0])])
+    accuracy[accuracy > 4*np.pi] = 4*np.pi
 
     nside = 64
     accuracy_func = interpolate.interp2d(
-        ra_grid-np.pi, dec_grid-np.pi/2, accuracy)
+        ra-np.pi, dec-np.pi/2, accuracy)
     accuracy_hp = np.hstack([accuracy_func(*hpt.pix2ang(nside, i))
                              for i in range(hpt.nside2npix(nside))])
     skymap.heatmap(accuracy_hp, label=ifo_name,

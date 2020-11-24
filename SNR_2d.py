@@ -1,6 +1,5 @@
 # %%
 import numpy as np
-import matplotlib.pyplot as plt
 from scipy import interpolate
 from astrotools import skymap, healpytools as hpt
 
@@ -51,10 +50,10 @@ def GR_waveform_from_mode_array(mode_array):
     return waveform
 
 
-def save_SNR_data(filename, position_SNR, default_parameters, ra_grid, dec_grid):
+def save_SNR_data(filename, position_SNR, default_parameters, ra, dec):
     SNR_data = dict(position_SNR=position_SNR,
                     default_parameters=default_parameters,
-                    ra_grid=ra_grid, dec_grid=dec_grid)
+                    ra=ra, dec=dec)
     with open(filename, 'wb') as f:
         pickle.dump(SNR_data, f)
 
@@ -62,7 +61,7 @@ def save_SNR_data(filename, position_SNR, default_parameters, ra_grid, dec_grid)
 def load_SNR_data(filename):
     with open(filename, 'rb') as f:
         SNR_data = pickle.load(f)
-    return SNR_data['position_SNR'], SNR_data['default_parameters'], SNR_data['ra_grid'], SNR_data['dec_grid']
+    return SNR_data['position_SNR'], SNR_data['default_parameters'], SNR_data['ra'], SNR_data['dec']
 
 
 # %%
@@ -109,30 +108,27 @@ parser.add_argument('--load', type=str, help='load SNR result from file')
 args = parser.parse_args()
 
 # %%
-
-
-def SNR_wrapper(ifo, mode_array, generator_from_mode, default_parameters):
-    def wrapped_SNR(ra, dec):
-        return SNR(ifo, mode_array, generator_from_mode, default_parameters, ra=ra, dec=dec)
+def SNR_wrapper(ifo, ra):
+    def wrapped_SNR(dec):
+        return SNR(ifo, mode_array, GR_generator_from_mode, default_parameters, ra=ra, dec=dec)
     return wrapped_SNR
 
 
 if args.load:
-    position_SNR, _, ra_grid, dec_grid = load_SNR_data(args.load)
+    position_SNR, _, ra, dec = load_SNR_data(args.load)
 else:
     pool = pathos.multiprocessing.ProcessPool(nodes=args.n)
 
     ra = np.linspace(0, 2*np.pi, 100)
     dec = np.linspace(0, np.pi, 100)
-    ra_grid, dec_grid = np.meshgrid(ra, dec)
-    position_SNR = {ifo.name: np.zeros(ra_grid.shape) for ifo in ifos}
+    position_SNR = {ifo.name: np.zeros(
+        list(ra.shape)+list(dec.shape)) for ifo in ifos}
 
     start_t = datetime.now()
 
     for ifo in ifos:
-        for i in range(ra_grid.shape[0]):
-            ifo_SNR = pool.map(SNR_wrapper(ifo, mode_array, GR_generator_from_mode,
-                                           default_parameters), ra_grid[i, :], dec_grid[i, :])
+        for i, ra_i in range(ra.shape[0]):
+            ifo_SNR = pool.map(SNR_wrapper(ifo, ra_i), dec)
             position_SNR[ifo.name][i, :] = np.array(ifo_SNR)
 
     end_t = datetime.now()
@@ -140,8 +136,8 @@ else:
 
 # %%
 for ifo_name, ifo_SNR in position_SNR.items():
+    SNR_func = interpolate.interp2d(ra-np.pi, dec-np.pi/2, ifo_SNR)
     nside = 64
-    SNR_func = interpolate.interp2d(ra_grid-np.pi, dec_grid-np.pi/2, ifo_SNR)
     SNR_hp = np.hstack([SNR_func(*hpt.pix2ang(nside, i))
                         for i in range(hpt.nside2npix(nside))])
     skymap.heatmap(SNR_hp, label=ifo_name,
