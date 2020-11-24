@@ -33,7 +33,7 @@ def single_ifo_fisher_matrix(ifo: Interferometer, mode_array: ModeArray,
 
     if step_dict is None:
         default_step_dict = dict(ra=1e-3, dec=1e-3, phase=1e-2, iota=1e-3,
-                                 total_mass=1e-4, mass_ratio=1e-6,
+                                 total_mass=1e-10, mass_ratio=1e-11,
                                  geocent_time=1e-5, psi=1e-5, lndL=1e-3)
         step_dict = {key: value for key,
                      value in default_step_dict.items() if key in parameter_names}
@@ -91,7 +91,7 @@ def single_ifo_fisher_matrix_stationary(
 
     if step_dict is None:
         default_step_dict = dict(ra=1e-3, dec=1e-3, phase=1e-2, iota=1e-3,
-                                 total_mass=1e-4, mass_ratio=1e-6,
+                                 total_mass=1e-10, mass_ratio=1e-11,
                                  geocent_time=1e-5, psi=1e-5, lndL=1e-3)
         step_dict = {key: value for key,
                      value in default_step_dict.items() if key in parameter_names}
