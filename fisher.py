@@ -1,7 +1,6 @@
 # %%
 import numpy as np
-from scipy import interpolate
-from astrotools import skymap, healpytools as hpt
+from plot_skymap import plot_skymap
 
 import bilby
 from pycbc.waveform import get_fd_waveform
@@ -64,9 +63,10 @@ def GR_waveform_from_mode_array(mode_array):
     return waveform
 
 
-def save_fisher_data(filename, all_fisher, default_parameters, ra, dec):
+def save_fisher_data(filename, all_fisher, default_parameters, parameter_names, ra, dec):
     fisher_data = dict(all_fisher=all_fisher,
                        default_parameters=default_parameters,
+                       parameter_names=parameter_names,
                        ra=ra, dec=dec)
     with open(filename, 'wb') as f:
         pickle.dump(fisher_data, f)
@@ -75,7 +75,7 @@ def save_fisher_data(filename, all_fisher, default_parameters, ra, dec):
 def load_fisher_data(filename):
     with open(filename, 'rb') as f:
         fisher_data = pickle.load(f)
-    return fisher_data['all_fisher'], fisher_data['default_parameters'], fisher_data['ra'], fisher_data['dec']
+    return fisher_data['all_fisher'], fisher_data['default_parameters'], fisher_data['parameter_names'], fisher_data['ra'], fisher_data['dec']
 
 
 # %%
@@ -140,7 +140,7 @@ def join_ifo_list(ifo_1: Union[Interferometer, TriangularInterferometer], ifo_2:
 
 
 ifos_dict = {ifo.name: ifo for ifo in ifos}
-name_of_networks = [['CE'], ['ET-B'], ['ET-D'], ['CE', 'ET-B'], ['CE', 'ET-D']]
+name_of_networks = [['CE', 'ET-B'], ['CE', 'ET-B', 'CE-Australia']]
 ifo_networks = {
     '&'.join(names): reduce(join_ifo_list, [ifos_dict[name] for name in names])
     for names in name_of_networks}
@@ -172,7 +172,8 @@ def fisher_stationary_wrapper(network, ra):
 
 
 if args.load:
-    all_fisher, _, ra, dec = load_fisher_data(args.load)
+    all_fisher, _, parameter_names, ra, dec = load_fisher_data(args.load)
+    name_to_index_map = {name: i for i, name in enumerate(parameter_names)}
 else:
     pool = pathos.multiprocessing.ProcessPool(nodes=args.n)
 
@@ -193,7 +194,7 @@ else:
     print('used time:', end_t-start_t)
 
     save_fisher_data(args.save, all_fisher,
-                     default_parameters, ra, dec)
+                     default_parameters, parameter_names, ra, dec)
 
 # %%
 for ifo_name, ifo_fisher in all_fisher.items():
@@ -205,12 +206,7 @@ for ifo_name, ifo_fisher in all_fisher.items():
     ] for i in range(ifo_fisher.shape[0])])
     accuracy[accuracy > 4*np.pi] = 4*np.pi
 
-    nside = 64
-    accuracy_func = interpolate.interp2d(
-        ra-np.pi, dec-np.pi/2, accuracy)
-    accuracy_hp = np.hstack([accuracy_func(*hpt.pix2ang(nside, i))
-                             for i in range(hpt.nside2npix(nside))])
-    skymap.heatmap(accuracy_hp, label=ifo_name,
-                   opath=f'{ifo_name}_localization.png')
+    plot_skymap(dec-np.pi/2, ra-np.pi, accuracy,
+                opath=f'{ifo_name}_localization.png', label=ifo_name)
 
 # %%

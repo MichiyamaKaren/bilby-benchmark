@@ -67,7 +67,7 @@ def load_SNR_data(filename):
 default_parameters = dict(
     total_mass=50, mass_ratio=0.5,
     phase=0, iota=30*np.pi/180, ra=3/2*np.pi, dec=2/3*np.pi, psi=30*np.pi/180,
-    luminosity_distance=1e3, geocent_time=1126259642.4,
+    redshift=1, geocent_time=1126259642.4,
     spin1x=0., spin1y=0., spin1z=0., spin2x=0., spin2y=0., spin2z=0.)
 
 varying_parameters = dict(
@@ -75,7 +75,7 @@ varying_parameters = dict(
     mass_ratio=np.linspace(0, 1, 100)[1:],
     iota=np.linspace(0, np.pi, 100),
     psi=np.linspace(0, np.pi, 100),
-    luminosity_distance=np.linspace(500, 2000, 500)
+    redshift=np.linspace(0.1, 2, 1000)
 )
 
 mode_array = [[2, 2]]
@@ -115,11 +115,9 @@ parser.add_argument('--load', type=str, help='load SNR result from file')
 args = parser.parse_args()
 
 # %%
-
-
-def SNR_wrapper(ifo, mode_array, generator_from_mode, default_parameters, para_name):
+def SNR_wrapper(ifo, para_name):
     def wrapped_SNR(para):
-        return SNR(ifo, mode_array, generator_from_mode, default_parameters, **{para_name: para})
+        return SNR(ifo, mode_array, GR_generator_from_mode, default_parameters, **{para_name: para})
     return wrapped_SNR
 
 
@@ -132,8 +130,7 @@ else:
     for para_name, para in varying_parameters.items():
         start_t = datetime.now()
         for ifo in ifos:
-            ifo_SNR = pool.map(SNR_wrapper(ifo, mode_array, GR_generator_from_mode,
-                                           default_parameters, para_name), para)
+            ifo_SNR = pool.map(SNR_wrapper(ifo, para_name), para)
             all_SNR[para_name][ifo.name] = np.array(ifo_SNR)
         end_t = datetime.now()
         print('used time:', end_t-start_t)

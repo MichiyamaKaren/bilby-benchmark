@@ -1,7 +1,6 @@
 # %%
 import numpy as np
-from scipy import interpolate
-from astrotools import skymap, healpytools as hpt
+from plot_skymap import plot_skymap
 
 import bilby
 from detector_response import SNR
@@ -68,7 +67,7 @@ def load_SNR_data(filename):
 default_parameters = dict(
     total_mass=50, mass_ratio=0.5,
     phase=0, iota=30*np.pi/180, ra=3/2*np.pi, dec=2/3*np.pi, psi=30*np.pi/180,
-    luminosity_distance=1e3, geocent_time=1126259642.4,
+    redshift=1, geocent_time=1126259642.4,
     spin1x=0., spin1y=0., spin1z=0., spin2x=0., spin2y=0., spin2z=0.)
 
 mode_array = [[2, 2]]
@@ -127,19 +126,16 @@ else:
     start_t = datetime.now()
 
     for ifo in ifos:
-        for i, ra_i in range(ra.shape[0]):
+        for i, ra_i in enumerate(ra):
             ifo_SNR = pool.map(SNR_wrapper(ifo, ra_i), dec)
             position_SNR[ifo.name][i, :] = np.array(ifo_SNR)
 
     end_t = datetime.now()
     print('used time:', end_t-start_t)
+    save_SNR_data(args.save, position_SNR, default_parameters, ra, dec)
 
 # %%
 for ifo_name, ifo_SNR in position_SNR.items():
-    SNR_func = interpolate.interp2d(ra-np.pi, dec-np.pi/2, ifo_SNR)
-    nside = 64
-    SNR_hp = np.hstack([SNR_func(*hpt.pix2ang(nside, i))
-                        for i in range(hpt.nside2npix(nside))])
-    skymap.heatmap(SNR_hp, label=ifo_name,
-                   opath=f'{ifo_name}_position_SNR.png')
+    plot_skymap(dec-np.pi/2, ra-np.pi, ifo_SNR,
+                opath=f'{ifo_name}_position_SNR.png', label=ifo_name)
 # %%

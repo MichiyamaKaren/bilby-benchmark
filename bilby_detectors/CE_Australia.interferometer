@@ -1,0 +1,13 @@
+# The proposed Cosmic Explorer located at Australia.
+name = 'CE-Australia'
+power_spectral_density = PowerSpectralDensity(psd_file='CE_psd.txt')
+minimum_frequency = 10
+maximum_frequency = 2048
+length = 40
+latitude = -31.51
+longitude = 115.74
+elevation = 0
+xarm_azimuth = 0
+yarm_azimuth = 90
+xarm_tilt = 0
+yarm_tilt = 0
