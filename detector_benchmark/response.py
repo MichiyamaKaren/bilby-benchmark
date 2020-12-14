@@ -3,7 +3,7 @@ import numpy as np
 
 import bilby
 from bilby.gw import utils as gwutils
-from .utils import t_SPA
+from .utils import SPA_time_shift
 from functools import partial
 
 from .typing import HarmonicMode, ModeArray
@@ -52,7 +52,7 @@ def get_detector_response(ifo: Interferometer, mode_array: ModeArray,
 
     signal_mode = []
     for mode in mode_array:
-        t = t_SPA(ifo.frequency_array, tc, m1, m2)
+        t += SPA_time_shift(ifo.frequency_array, tc, m1, m2)
         t = t.astype('float64')
         waveform_polarizations = generator_from_mode(
             mode).frequency_domain_strain(parameters)
