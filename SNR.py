@@ -2,7 +2,7 @@
 import numpy as np
 
 import bilby
-from waveform import GR_waveform_from_mode_array
+from waveform import GR_waveform
 from detector_benchmark import Network, SNREvaluater
 from bilby.gw import WaveformGenerator
 
@@ -39,11 +39,13 @@ waveform_arguments = dict(minimum_frequency=10,
 
 
 def GR_generator_from_mode(mode):
+    wf_args = waveform_arguments.copy()
+    wf_args['mode_array'] = [mode]
     return WaveformGenerator(
         duration=duration, sampling_frequency=sampling_frequency,
-        frequency_domain_source_model=GR_waveform_from_mode_array([mode]),
+        frequency_domain_source_model=GR_waveform,
         parameter_conversion=bilby.gw.conversion.convert_to_lal_binary_black_hole_parameters,
-        waveform_arguments=waveform_arguments)  # , init_log=False)
+        waveform_arguments=wf_args)
 
 
 GR_generator_22 = GR_generator_from_mode([2, 2])
