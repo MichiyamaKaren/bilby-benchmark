@@ -79,10 +79,10 @@ for network in networks:
             para, value,
             stationary=True, wf_generator=GR_generator_22,
             nodes=args.n)
-        evaluater.evaluate_SNR_on_sky(
-            theta_values, phi_values,
-            stationary=True, wf_generator=GR_generator_22,
-            nodes=args.n)
+    evaluater.evaluate_SNR_on_sky(
+        theta_values, phi_values,
+        stationary=True, wf_generator=GR_generator_22,
+        nodes=args.n)
     evaluater.dump_result(f'{network.name}_SNR.pkl')
 end_t = datetime.now()
 print('used time:', end_t-start_t)
