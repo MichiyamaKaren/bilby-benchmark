@@ -1,4 +1,4 @@
-from .arbitary_frame_ifo import ArbitaryFrameIfo
+from .expand_ifo import ExpandedInterferometer
 from .network import Network
-from .SNR_evaluater import SNREvaluater
-from .result import SNRResult
+
+from .evaluater import SNREvaluater, SNRResult

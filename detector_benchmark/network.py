@@ -1,37 +1,71 @@
 import numpy as np
 
-from .arbitary_frame_ifo import ArbitaryFrameIfo
+from .expand_ifo import ExpandedInterferometer
 
-from typing import List, Dict, Union, Callable
-from .typing import Interferometer, TriangularInterferometer, WaveformGenerator, HarmonicMode, ModeArray
+from typing import List, Dict, Callable, Optional, Iterable, Union
+from .typing import WaveformGenerator, Interferometer, TriangularInterferometer, HarmonicMode, ModeArray
 
+SingleIfo = Union[Interferometer, TriangularInterferometer, ExpandedInterferometer]
 
 class Network:
-    def __init__(self, name: str, ifos: List[ArbitaryFrameIfo]) -> None:
+    def __init__(self, name: str, ifos: List[SingleIfo]) -> None:
         self.name = name
-        self.ifos = ifos
+        self.ifos: List[ExpandedInterferometer] = []
+        for ifo in ifos:
+            self.append_ifo(ifo)
 
-    def append(self, ifo:ArbitaryFrameIfo) -> None:
-        self.ifos.append(ifo)
-
-    def append_ifo(self, ifo: Union[Interferometer, TriangularInterferometer]) -> None:
+    def append_ifo(self, ifo: SingleIfo) -> None:
         if isinstance(ifo, Interferometer):
-            self.ifos.append(ArbitaryFrameIfo.from_ifo_instance(ifo))
+            self.ifos.append(ExpandedInterferometer.from_ifo_instance(ifo))
         elif isinstance(ifo, TriangularInterferometer):
-            vertexes = [ifo_i.vertex for ifo_i in ifo]
-            x = vertexes[1]-vertexes[0]
-            y = vertexes[2]-(vertexes[0]+vertexes[1])/2
-            self.ifos += [ArbitaryFrameIfo.from_ifo_instance(
-                ifo_i, frame_x=x, frame_y=y) for ifo_i in ifo]
+            self.ifos += [
+                ExpandedInterferometer.from_ifo_instance(ifo_i) for ifo_i in ifo]
+        else:
+            self.ifos.append(ifo)
+
+    def set_strain_data_from_power_spectral_densities(self, sampling_frequency, duration, start_time=0):
+        for ifo in self.ifos:
+            ifo.set_strain_data_from_power_spectral_density(sampling_frequency=sampling_frequency,
+                                                            duration=duration,
+                                                            start_time=start_time)
 
     def get_optimal_snr_stationary(self, parameters: Dict, waveform_generator: WaveformGenerator) -> float:
-        snr_squares = [ifo.get_optimal_snr_stationary(
-            parameters, waveform_generator)**2 for ifo in self.ifos]
+        waveform = waveform_generator.frequency_domain_strain(parameters)
+        snr_squares = []
+        for ifo in self.ifos:
+            signal = ifo.get_detector_response(waveform, parameters)
+            snr_squares.append(ifo.optimal_snr_squared(signal))
         return np.sqrt(sum(snr_squares)).real
-    
+
     def get_optimal_snr_rotating(self, parameters: Dict,
                                  waveform_generator_from_mode: Callable[[HarmonicMode], WaveformGenerator],
                                  mode_array: ModeArray) -> float:
-        snr_squares = [ifo.get_optimal_snr_rotating(
-            parameters, waveform_generator_from_mode, mode_array)**2 for ifo in self.ifos]
+        snr_squares = []
+        for ifo in self.ifos:
+            signal = ifo.get_detector_response_rotating(parameters, waveform_generator_from_mode, mode_array)
+            snr_squares.append(ifo.optimal_snr_squared(signal))
         return np.sqrt(sum(snr_squares)).real
+    
+    def fisher_matrix_stationary(
+        self, parameters: Dict, derivate_parameters: List[str], waveform_generator: Optional[WaveformGenerator] = None,
+        convert_log: Optional[Iterable[str]] = None, convert_cos: Optional[Iterable[str]] = None,
+        step=1e-7) -> np.ndarray:
+
+        fishers = [ifo.fisher_matrix_stationary(
+            parameters, derivate_parameters, waveform_generator,
+            convert_log=convert_log, convert_cos=convert_cos, step=step)
+            for ifo in self.ifos]
+        return sum(fishers)
+    
+    def fisher_matrix_rotating(
+        self, parameters: Dict, derivate_parameters: List[str],
+        waveform_generator_from_mode: Callable[[HarmonicMode], WaveformGenerator],
+        mode_array: ModeArray,
+        convert_log: Optional[Iterable[str]] = None, convert_cos: Optional[Iterable[str]] = None,
+        step=1e-7) -> np.ndarray:
+
+        fishers = [ifo.fisher_matrix_rotating(
+            parameters, derivate_parameters, waveform_generator_from_mode, mode_array,
+            convert_log=convert_log, convert_cos=convert_cos, step=step)
+            for ifo in self.ifos]
+        return sum(fishers)
